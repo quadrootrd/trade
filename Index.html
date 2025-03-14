@@ -3,17 +3,9 @@
 <head>
     <title>BTC Price Correlation</title>
     <style>
-        canvas { 
-            max-width: 800px; 
-            margin: 20px 0;
-        }
-        button {
-            padding: 10px 20px;
-            margin: 10px 0;
-        }
-        #results {
-            margin: 20px 0;
-        }
+        canvas { max-width: 800px; margin: 20px 0; }
+        button { padding: 10px 20px; margin: 10px 0; }
+        #results { margin: 20px 0; }
     </style>
 </head>
 <body>
@@ -28,26 +20,29 @@
         let dates = [];
         let chart;
 
-        // Fetch BTC prices for last 2 years
         async function fetchBTCPrices() {
-            const days = 730; // 2 years
-            const url = `https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=${days}&interval=daily`;
-            
+            document.getElementById('results').innerHTML = "Loading BTC data...";
             try {
-                const response = await fetch(url);
+                const response = await fetch('https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=730&interval=daily');
+                if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
                 const data = await response.json();
                 prices = data.prices.map(price => price[1]);
-                dates = data.prices.map(price => {
-                    const date = new Date(price[0]);
-                    return date.toISOString().split('T')[0];
+                dates = data.prices.map(price => new Date(price[0]).toISOString().split('T')[0]);
+                createChart();
+                document.getElementById('results').innerHTML = "Data loaded successfully!";
+            } catch (error) {
+                console.error('Fetch error:', error);
+                document.getElementById('results').innerHTML = `Error: ${error.message}. Using sample data.`;
+                prices = Array(730).fill(0).map((_, i) => 24000 + i * 50);
+                dates = Array(730).fill(0).map((_, i) => {
+                    const d = new Date('2023-03-13');
+                    d.setDate(d.getDate() + i);
+                    return d.toISOString().split('T')[0];
                 });
                 createChart();
-            } catch (error) {
-                console.error('Error fetching data:', error);
             }
         }
 
-        // Create initial price chart
         function createChart() {
             const ctx = document.getElementById('priceChart').getContext('2d');
             chart = new Chart(ctx, {
@@ -61,21 +56,13 @@
                         tension: 0.1
                     }]
                 },
-                options: {
-                    scales: {
-                        y: {
-                            beginAtZero: false
-                        }
-                    }
-                }
+                options: { scales: { y: { beginAtZero: false } } }
             });
         }
 
-        // Calculate Pearson correlation coefficient
         function calculateCorrelation(arr1, arr2) {
             const n = arr1.length;
             let sum1 = 0, sum2 = 0, sum1Sq = 0, sum2Sq = 0, pSum = 0;
-            
             for (let i = 0; i < n; i++) {
                 sum1 += arr1[i];
                 sum2 += arr2[i];
@@ -83,55 +70,40 @@
                 sum2Sq += arr2[i] * arr2[i];
                 pSum += arr1[i] * arr2[i];
             }
-
             const num = pSum - (sum1 * sum2 / n);
             const den = Math.sqrt((sum1Sq - sum1 * sum1 / n) * (sum2Sq - sum2 * sum2 / n));
-            
             return den === 0 ? 0 : num / den;
         }
 
-        // Find best correlation match
         function findCorrelation() {
+            if (!chart) {
+                document.getElementById('results').innerHTML = "Chart not initialized yet!";
+                return;
+            }
             const windowSize = 50;
             const latest50 = prices.slice(-windowSize);
             let bestCorrelation = -1;
             let bestIndex = 0;
 
-            // Slide window through historical data
             for (let i = 0; i < prices.length - windowSize - 25; i++) {
                 const window = prices.slice(i, i + windowSize);
                 const correlation = calculateCorrelation(latest50, window);
-                
                 if (correlation > bestCorrelation) {
                     bestCorrelation = correlation;
                     bestIndex = i;
                 }
             }
 
-            // Get the 25 days following the best match
             const matchPeriod = prices.slice(bestIndex, bestIndex + windowSize + 25);
             const matchDates = dates.slice(bestIndex, bestIndex + windowSize + 25);
 
-            // Update chart
             chart.data.datasets = [
-                {
-                    label: 'BTC Price (USD)',
-                    data: prices,
-                    borderColor: 'rgb(255, 99, 132)',
-                    tension: 0.1
-                },
-                {
-                    label: 'Best Match Period',
-                    data: new Array(bestIndex).fill(null).concat(matchPeriod),
-                    borderColor: 'rgb(0, 255, 0)',
-                    tension: 0.1
-                }
+                { label: 'BTC Price (USD)', data: prices, borderColor: 'rgb(255, 99, 132)', tension: 0.1 },
+                { label: 'Best Match Period', data: new Array(bestIndex).fill(null).concat(matchPeriod), borderColor: 'rgb(0, 255, 0)', tension: 0.1 }
             ];
             chart.update();
 
-            // Display results
-            const resultsDiv = document.getElementById('results');
-            resultsDiv.innerHTML = `
+            document.getElementById('results').innerHTML = `
                 <h3>Results:</h3>
                 <p>Best Correlation: ${bestCorrelation.toFixed(4)}</p>
                 <p>Start Date of Match: ${dates[bestIndex]}</p>
@@ -141,7 +113,6 @@
             `;
         }
 
-        // Initial fetch
         fetchBTCPrices();
     </script>
 </body>

@@ -23,44 +23,37 @@
         async function fetchBTCPrices() {
             document.getElementById('results').innerHTML = "Loading BTC data...";
             const apiUrl = 'https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=730&interval=daily';
-            const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
 
             try {
-                // Try direct fetch first
-                let response = await fetch(apiUrl);
-                if (!response.ok) {
-                    throw new Error(`Direct fetch failed: ${response.status} ${response.statusText}`);
-                }
-                let data = await response.json();
-                processData(data);
-            } catch (error) {
-                console.error('Direct fetch error:', error);
-                document.getElementById('results').innerHTML = `Direct fetch failed: ${error.message}. Trying proxy...`;
-
-                // Fallback to proxy
-                try {
-                    response = await fetch(proxyUrl + apiUrl);
-                    if (!response.ok) {
-                        throw new Error(`Proxy fetch failed: ${response.status} ${response.statusText}`);
+                const response = await fetch(apiUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
                     }
-                    data = await response.json();
-                    processData(data);
-                } catch (proxyError) {
-                    console.error('Proxy fetch error:', proxyError);
-                    document.getElementById('results').innerHTML = `Error: ${proxyError.message}. Please try again later or check console for details.`;
+                });
+                if (!response.ok) {
+                    throw new Error(`HTTP error: ${response.status} ${response.statusText}`);
                 }
-            }
-        }
+                const data = await response.json();
+                
+                // Validate data
+                if (!data.prices || !Array.isArray(data.prices) || data.prices.length === 0) {
+                    throw new Error("Invalid or empty data received from CoinGecko");
+                }
 
-        function processData(data) {
-            prices = data.prices.map(price => price[1]);
-            dates = data.prices.map(price => new Date(price[0]).toISOString().split('T')[0]);
-            if (prices.length < 730) {
-                document.getElementById('results').innerHTML = `Warning: Only ${prices.length} days of data received.`;
-            } else {
+                prices = data.prices.map(price => price[1]);
+                dates = data.prices.map(price => new Date(price[0]).toISOString().split('T')[0]);
+                
+                if (prices.length < 730) {
+                    document.getElementById('results').innerHTML += `<br>Warning: Only ${prices.length} days of data received.`;
+                }
                 document.getElementById('results').innerHTML = "Real BTC data loaded successfully!";
+                createChart();
+            } catch (error) {
+                console.error('Fetch error:', error);
+                document.getElementById('results').innerHTML = `Error loading data: ${error.message}. Check console for details.`;
             }
-            createChart();
         }
 
         function createChart() {
